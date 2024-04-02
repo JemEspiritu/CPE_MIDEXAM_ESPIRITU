@@ -1,0 +1,62 @@
+---
+- name: Install and Configure Nagios
+  hosts: jem
+  become: yes
+  vars:
+    nagios_user: nagiosadmin
+    nagios_password: your_password_here
+
+  tasks:
+    - name: Stop Firewall
+      service:
+        name: ufw
+        state: stopped
+        enabled: no
+
+    - name: Download and unarchive Nagios Core source
+      unarchive:
+        src: https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.4.5.tar.gz
+        dest: /tmp/
+        remote_src: yes
+      register: nagios_source
+
+    - name: Create Make file for Nagios Core
+      shell: cd /tmp/nagioscore-nagios-4.4.5 && ./configure --with-httpd-conf=/etc/apache2/sites-enabled
+      when: nagios_source.changed
+
+    - name: Compile and install Nagios Core
+      make:
+        chdir: /tmp/nagioscore-nagios-4.4.5/
+        target: all
+      when: nagios_source.changed
+
+    - name: Create user and group for Nagios
+      make:
+        chdir: /tmp/nagioscore-nagios-4.4.5
+        target: install-groups-users
+      when: nagios_source.changed
+
+    - name: Add www-data user to nagios group
+      user:
+        name: www-data
+        groups: nagios
+        append: yes
+
+    # Additional tasks for Nagios configuration
+
+    - name: Download and unarchive Nagios Plugins
+      unarchive:
+        src: https://github.com/nagios-plugins/nagios-plugins/archive/release-2.2.1.tar.gz
+        dest: /tmp/
+        remote_src: yes
+      register: nagios_plugin
+
+    - name: Create Make file for Nagios Plugins
+      shell: cd /tmp/nagios-plugins-release-2.2.1 && ./tools/setup && ./configure
+      when: nagios_plugin.changed
+
+    - name: Compile and install Nagios Plugins
+      make:
+        chdir: /tmp/nagios-plugins-release-2.2.1/
+      when: nagios_plugin.changed
+
